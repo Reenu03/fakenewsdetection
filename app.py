@@ -3,6 +3,7 @@ os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
 import streamlit as st
 import tf_keras as keras
+from tf_keras.preprocessing.sequence import pad_sequences
 import numpy as np
 import json
 import pickle
@@ -47,8 +48,6 @@ if st.button("Analyze"):
     if text.strip() == "":
         st.warning("Please enter some text first.")
     else:
-        from tensorflow.keras.preprocessing.sequence import pad_sequences
-
         seq = tokenizer.texts_to_sequences([text])
         padded = pad_sequences(seq, maxlen=MAX_LEN, padding='post', truncating='post')
 
