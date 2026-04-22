@@ -1,33 +1,61 @@
-import streamlit as st
-import pickle
-from tensorflow.keras.models import load_model
-from tensorflow.keras.preprocessing.sequence import pad_sequences
+import os
+os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
-model = load_model("model.h5")
-tokenizer = pickle.load(open("tokenizer.pkl", "rb"))
+import streamlit as st
+import tf_keras as keras
+import numpy as np
+import json
+import pickle
+
+# ─── Load Model ───────────────────────────────────────────────────────────────
+@st.cache_resource
+def load_model():
+    with open('model_config.json') as f:
+        config = json.load(f)
+
+    model = keras.Sequential.from_config(config)
+    data = np.load('model_weights_f16.npz')
+
+    for layer in model.layers:
+        weights, i = [], 0
+        while f"{layer.name}_{i}" in data:
+            weights.append(data[f"{layer.name}_{i}"].astype(np.float32))
+            i += 1
+        if weights:
+            layer.set_weights(weights)
+
+    return model
+
+# ─── Load Tokenizer ───────────────────────────────────────────────────────────
+@st.cache_resource
+def load_tokenizer():
+    with open('tokenizer.pkl', 'rb') as f:
+        return pickle.load(f)
+
+model = load_model()
+tokenizer = load_tokenizer()
 
 MAX_LEN = 40
 
-st.title("📰 Fake News Detection using LSTM")
+# ─── UI ───────────────────────────────────────────────────────────────────────
+st.title("📰 Fake News Detector")
+st.write("Enter a news article or headline below to check if it's real or fake.")
 
-input_text = st.text_area("Enter News Content")
+text = st.text_area("Enter news text here:", height=150)
 
-if st.button("Predict"):
-    if input_text.strip() != "":
-        
-        input_text = input_text.lower()
+if st.button("Analyze"):
+    if text.strip() == "":
+        st.warning("Please enter some text first.")
+    else:
+        from tensorflow.keras.preprocessing.sequence import pad_sequences
 
-        seq = tokenizer.texts_to_sequences([input_text])
+        seq = tokenizer.texts_to_sequences([text])
         padded = pad_sequences(seq, maxlen=MAX_LEN, padding='post', truncating='post')
 
-        prediction = model.predict(padded)[0][0]
+        pred = model.predict(padded)[0][0]
 
-        if prediction > 0.5:
-            st.error("❌ Fake News")
+        st.markdown("---")
+        if pred > 0.5:
+            st.error(f"🔴 Fake News ❌  (Confidence: {pred*100:.1f}%)")
         else:
-            st.success("✅ Real News")
-
-        st.write(f"Confidence: {prediction*100:.2f}%")
-
-    else:
-        st.warning("Please enter some text")
+            st.success(f"🟢 Real News ✅  (Confidence: {(1-pred)*100:.1f}%)")
