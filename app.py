@@ -1,12 +1,20 @@
 import os
+import sys
 os.environ['TF_USE_LEGACY_KERAS'] = '1'
 
+# Fix for tokenizer.pkl saved with old keras
+import tf_keras
+sys.modules['keras'] = tf_keras
+sys.modules['keras.preprocessing'] = tf_keras.preprocessing
+sys.modules['keras.preprocessing.text'] = tf_keras.preprocessing.text
+
 import streamlit as st
-import tf_keras as keras
-from tf_keras.preprocessing.sequence import pad_sequences
 import numpy as np
 import json
 import pickle
+from tf_keras.preprocessing.sequence import pad_sequences
+
+MAX_LEN = 40
 
 # ─── Load Model ───────────────────────────────────────────────────────────────
 @st.cache_resource
@@ -14,7 +22,7 @@ def load_model():
     with open('model_config.json') as f:
         config = json.load(f)
 
-    model = keras.Sequential.from_config(config)
+    model = tf_keras.Sequential.from_config(config)
     data = np.load('model_weights_f16.npz')
 
     for layer in model.layers:
@@ -36,8 +44,6 @@ def load_tokenizer():
 model = load_model()
 tokenizer = load_tokenizer()
 
-MAX_LEN = 40
-
 # ─── UI ───────────────────────────────────────────────────────────────────────
 st.title("📰 Fake News Detector")
 st.write("Enter a news article or headline below to check if it's real or fake.")
@@ -50,7 +56,6 @@ if st.button("Analyze"):
     else:
         seq = tokenizer.texts_to_sequences([text])
         padded = pad_sequences(seq, maxlen=MAX_LEN, padding='post', truncating='post')
-
         pred = model.predict(padded)[0][0]
 
         st.markdown("---")
